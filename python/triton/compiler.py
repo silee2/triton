@@ -958,8 +958,8 @@ def ast_to_ttir(fn, signature, specialization, constants):
 
 def ttir_to_ttgir(mod, num_warps, num_stages, compute_capability):
     pm = _triton.ir.pass_manager(mod.context)
-    pm.add_convert_triton_to_tritongpu_pass(num_warps)
     pm.enable_debug()
+    pm.add_convert_triton_to_tritongpu_pass(num_warps)
     pm.add_coalesce_pass()
     # The combine pass converts blocked layout to mma layout
     # for dot ops so that pipeline can get shared memory swizzled correctly.
@@ -1526,8 +1526,12 @@ arg_type_pattern = {
 def compile(fn, **kwargs):
     capability = kwargs.get("cc", None)
     if capability is None:
-        device = torch.cuda.current_device()
-        capability = torch.cuda.get_device_capability(device)
+        if not os.getenv("TRITON_USE_FAKE_CUDA", default=0):
+            device = torch.cuda.current_device()
+            capability = torch.cuda.get_device_capability(device)
+        else:
+            device = 0
+            capability = (8, 6)
         capability = capability[0] * 10 + capability[1]
     # we get the kernel, i.e. the first function generated in the module
     # if fn is not a JITFunction, then it
@@ -1580,7 +1584,8 @@ def compile(fn, **kwargs):
         first_stage = list(stages.keys()).index(ir)
 
     # cache manager
-    so_path = make_stub(name, signature, constants)
+    if not os.getenv("TRITON_USE_FAKE_CUDA", default=0):
+        so_path = make_stub(name, signature, constants)
     # create cache manager
     fn_cache_manager = CacheManager(make_hash(fn, **kwargs))
     # determine name and extension type of provided function
@@ -1626,6 +1631,9 @@ def compile(fn, **kwargs):
     # write-back metadata
     fn_cache_manager.put(json.dumps(metadata), f"{name}.json", binary=False)
     # return handle to compiled kernel
+    if os.getenv("TRITON_USE_FAKE_CUDA"):
+        print("INFO: Exiting triton.compile using fake cuda.")
+        exit()
     return CompiledKernel(so_path, metadata, asm)
 
 

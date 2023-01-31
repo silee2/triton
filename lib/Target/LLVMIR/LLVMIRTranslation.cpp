@@ -237,7 +237,10 @@ translateTritonGPUToLLVMIR(llvm::LLVMContext *llvmContext,
   auto printingFlags = mlir::OpPrintingFlags();
   printingFlags.elideLargeElementsAttrs(16);
   pm.enableIRPrinting(
-      /*shouldPrintBeforePass=*/nullptr,
+      /*shouldPrintBeforePass=*//*nullptr,*/
+      [](mlir::Pass *pass, mlir::Operation *) {
+        return ::triton::tools::getBoolEnv("MLIR_ENABLE_DUMP");
+      },
       /*shouldPrintAfterPass=*/
       [](mlir::Pass *pass, mlir::Operation *) {
         return ::triton::tools::getBoolEnv("MLIR_ENABLE_DUMP");
